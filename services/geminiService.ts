@@ -1,6 +1,16 @@
 
-
-
+/**
+ * Gemini AI Service
+ *
+ * This service handles all AI operations (transcription, chart generation, analysis).
+ *
+ * AUTHENTICATION:
+ * - Uses simple Gemini API key (NOT Google OAuth)
+ * - API key stored in localStorage as 'geminiApiKey'
+ * - No user login required - just an API key
+ *
+ * NOTE: This is completely separate from Google Drive/Calendar OAuth authentication
+ */
 
 import { GoogleGenAI } from '@google/genai';
 import { splitAudioBlob } from '../utils/audioUtils.ts';

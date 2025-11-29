@@ -1,3 +1,17 @@
+/**
+ * Google Drive Service
+ *
+ * This service handles Google Drive operations (save, download, picker).
+ *
+ * AUTHENTICATION:
+ * - Uses Google OAuth 2.0 tokens (NOT Gemini API key)
+ * - Requires: googleDeveloperKey (for Picker API) and OAuth access token
+ * - OAuth token is stored in localStorage as 'googleOauthToken'
+ * - OAuth token managed by useGoogleAuth hook
+ *
+ * NOTE: This is completely separate from Gemini API authentication
+ */
+
 // FIX: Removed references to missing type definitions for google.picker and gapi.client.drive.
 // The global `window.gapi` and `window.google` are typed as `any`, which is sufficient for compilation.
 
@@ -105,7 +119,7 @@ export const saveToGoogleDrive = async (chartContent: string): Promise<void> => 
 
 
 export const openDrivePicker = (
-    googleApiKey: string,
+    googleDeveloperKey: string,
     pickerCallback: (data: any) => void
 ) => {
     const oauthToken = getOauthToken();
@@ -128,7 +142,7 @@ export const openDrivePicker = (
     const picker = new window.google.picker.PickerBuilder()
         .addView(view)
         .setOAuthToken(oauthToken)
-        .setDeveloperKey(googleApiKey)
+        .setDeveloperKey(googleDeveloperKey)
         .setCallback(pickerCallback)
         .build();
     picker.setVisible(true);

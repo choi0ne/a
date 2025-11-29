@@ -17,18 +17,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
     const [geminiKey, setGeminiKey] = useState(currentSettings.geminiKey);
     const [googleClientId, setGoogleClientId] = useState(currentSettings.googleClientId);
-    const [googleApiKey, setGoogleApiKey] = useState(currentSettings.googleApiKey);
+    const [googleDeveloperKey, setGoogleDeveloperKey] = useState(currentSettings.googleDeveloperKey);
 
     useEffect(() => {
         setGeminiKey(currentSettings.geminiKey);
         setGoogleClientId(currentSettings.googleClientId);
-        setGoogleApiKey(currentSettings.googleApiKey);
+        setGoogleDeveloperKey(currentSettings.googleDeveloperKey);
     }, [currentSettings, isOpen]);
 
     if (!isOpen) return null;
 
     const handleSave = () => {
-        onSave({ geminiKey, googleClientId, googleApiKey });
+        onSave({ geminiKey, googleClientId, googleDeveloperKey });
     };
 
     return (
@@ -96,16 +96,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 />
                             </div>
                             <div>
-                                <label htmlFor="google-api-key" className="block text-sm font-medium text-gray-300 mb-1">
-                                    API Key (Google API 호출용)
+                                <label htmlFor="google-developer-key" className="block text-sm font-medium text-gray-300 mb-1">
+                                    Developer Key (Drive/Calendar/Picker용)
                                 </label>
                                 <input
-                                    id="google-api-key"
+                                    id="google-developer-key"
                                     type="password"
-                                    value={googleApiKey}
-                                    onChange={(e) => setGoogleApiKey(e.target.value)}
+                                    value={googleDeveloperKey}
+                                    onChange={(e) => setGoogleDeveloperKey(e.target.value)}
                                     className="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                                    placeholder="Google API Key를 입력하세요"
+                                    placeholder="Google Developer Key를 입력하세요"
                                 />
                             </div>
                             <a

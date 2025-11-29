@@ -50,12 +50,14 @@ const App: React.FC = () => {
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
 
   // API Keys
+  // NOTE: geminiApiKey is for AI services (transcription, chart generation)
+  // googleClientId and googleDeveloperKey are for OAuth and Google Workspace APIs (Drive, Calendar, Picker)
   const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('geminiApiKey') || '');
   const [googleClientId, setGoogleClientId] = useState(() => localStorage.getItem('googleClientId') || '');
-  const [googleApiKey, setGoogleApiKey] = useState(() => localStorage.getItem('googleApiKey') || '');
+  const [googleDeveloperKey, setGoogleDeveloperKey] = useState(() => localStorage.getItem('googleDeveloperKey') || '');
 
   // Google Authentication (using custom hook)
-  const { isSignedIn, signIn: handleSignIn, signOut: handleSignOut, error: googleAuthError } = useGoogleAuth(googleClientId, googleApiKey);
+  const { isSignedIn, signIn: handleSignIn, signOut: handleSignOut, error: googleAuthError } = useGoogleAuth(googleClientId, googleDeveloperKey);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -109,15 +111,22 @@ const App: React.FC = () => {
     } catch (err) {
       if (err instanceof Error) {
         const lowerCaseMessage = err.message.toLowerCase();
-        if (lowerCaseMessage.includes('api key')) {
+        if (lowerCaseMessage.includes('api key') || lowerCaseMessage.includes('api_key')) {
           setError(
             <>
-              SOAP 차트 생성 실패: API 키가 잘못되었을 수 있습니다. <br />
+              SOAP 차트 생성 실패: Gemini API 키가 잘못되었을 수 있습니다. <br />
               설정 메뉴에서 Gemini API 키를 확인해주세요.
             </>
           );
         } else if (lowerCaseMessage.includes('google drive')) {
             setError(`차트 생성은 완료되었으나, Google Drive 저장 실패: ${err.message}`);
+        } else if (lowerCaseMessage.includes('로그인') || lowerCaseMessage.includes('토큰')) {
+            setError(
+              <>
+                차트 생성은 완료되었으나, Google 인증 문제로 Drive 저장 실패. <br />
+                Google 로그인을 다시 시도해주세요.
+              </>
+            );
         }
         else {
           setError(
@@ -222,7 +231,7 @@ const App: React.FC = () => {
     }
 
     try {
-        openDrivePicker(googleApiKey, pickerCallback);
+        openDrivePicker(googleDeveloperKey, pickerCallback);
     } catch(err) {
         setError(err instanceof Error ? err.message : 'Google Picker를 열 수 없습니다.');
         // Potentially prompt for sign-in again if the error is auth-related
@@ -230,7 +239,7 @@ const App: React.FC = () => {
             handleSignIn();
         }
     }
-  }, [isSignedIn, googleApiKey, handleSignIn, pickerCallback]);
+  }, [isSignedIn, googleDeveloperKey, handleSignIn, pickerCallback]);
 
   const handleToggleRecording = useCallback(async () => {
     if (!geminiApiKey) {
@@ -526,8 +535,8 @@ const App: React.FC = () => {
     setGeminiApiKey(settings.geminiKey);
     localStorage.setItem('googleClientId', settings.googleClientId);
     setGoogleClientId(settings.googleClientId);
-    localStorage.setItem('googleApiKey', settings.googleApiKey);
-    setGoogleApiKey(settings.googleApiKey);
+    localStorage.setItem('googleDeveloperKey', settings.googleDeveloperKey);
+    setGoogleDeveloperKey(settings.googleDeveloperKey);
     setIsSettingsOpen(false);
     alert('설정이 저장되었습니다. 페이지를 새로고침하여 적용해주세요.');
   };
@@ -718,12 +727,12 @@ const App: React.FC = () => {
             </div>
 
             {/* Additional Notes Panel */}
-            <div 
+            <div
               className={`bg-gray-800 rounded-lg shadow-xl p-6 flex flex-col flex-1 relative transition-all duration-300 ${isDraggingOver ? 'border-2 border-dashed border-brand-primary ring-4 ring-brand-primary/20' : 'border-2 border-transparent'}`}
               onDrop={handleDrop}
               onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
               onDragEnter={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
-              onDragLeave={(e) => { setIsDraggingOver(false); }}
+              onDragLeave={() => { setIsDraggingOver(false); }}
             >
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold text-white">음성/텍스트 입력</h2>
@@ -824,10 +833,10 @@ const App: React.FC = () => {
         isOpen={isSettingsOpen}
         onClose={handleCloseSettings}
         onSave={handleSaveSettings}
-        currentSettings={{ 
-            geminiKey: geminiApiKey, 
-            googleClientId: googleClientId, 
-            googleApiKey: googleApiKey 
+        currentSettings={{
+            geminiKey: geminiApiKey,
+            googleClientId: googleClientId,
+            googleDeveloperKey: googleDeveloperKey
         }}
       />
       <AnalysisModal

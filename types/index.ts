@@ -1,7 +1,7 @@
 export interface Settings {
     geminiKey: string;
     googleClientId: string;
-    googleApiKey: string;
+    googleDeveloperKey: string;  // Used for Google Picker API, NOT for Gemini
 }
 
 export interface GoogleOAuthToken {

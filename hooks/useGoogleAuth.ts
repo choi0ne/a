@@ -14,6 +14,45 @@ export const useGoogleAuth = (googleClientId: string, googleApiKey: string) => {
     const [error, setError] = useState<string | null>(null);
     const [isInitialized, setIsInitialized] = useState(false);
 
+    // Auto-refresh token before expiration
+    useEffect(() => {
+        if (!isSignedIn || !tokenClient) return;
+
+        const checkAndRefreshToken = () => {
+            const storedToken = localStorage.getItem('googleOauthToken');
+            if (!storedToken) {
+                console.log('⚠️ No token found, signing out');
+                setIsSignedIn(false);
+                return;
+            }
+
+            try {
+                const token: GoogleOAuthToken = JSON.parse(storedToken);
+                const timeUntilExpiry = token.expiresAt - Date.now();
+
+                // If token expires in less than 5 minutes, refresh it
+                if (timeUntilExpiry < 5 * 60 * 1000) {
+                    console.log('🔄 Token expiring soon, refreshing...');
+
+                    // Silent refresh (no prompt)
+                    tokenClient.requestAccessToken({ prompt: '' });
+                } else {
+                    console.log(`✅ Token valid for ${Math.floor(timeUntilExpiry / 60000)} more minutes`);
+                }
+            } catch (e) {
+                console.error('Failed to check token:', e);
+            }
+        };
+
+        // Check immediately
+        checkAndRefreshToken();
+
+        // Then check every 5 minutes
+        const intervalId = setInterval(checkAndRefreshToken, 5 * 60 * 1000);
+
+        return () => clearInterval(intervalId);
+    }, [isSignedIn, tokenClient]);
+
     // Initialize Google APIs
     useEffect(() => {
         if (!googleClientId || !googleApiKey) {
@@ -160,12 +199,46 @@ export const useGoogleAuth = (googleClientId: string, googleApiKey: string) => {
         console.log('✅ Signed out');
     }, []);
 
+    // Check if current token is valid
+    const isTokenValid = useCallback(() => {
+        const storedToken = localStorage.getItem('googleOauthToken');
+        if (!storedToken) return false;
+
+        try {
+            const token: GoogleOAuthToken = JSON.parse(storedToken);
+            return token.accessToken && token.expiresAt > Date.now() + 60000;
+        } catch {
+            return false;
+        }
+    }, []);
+
+    // Refresh token silently
+    const refreshToken = useCallback(() => {
+        console.log('🔄 Attempting to refresh token...');
+
+        if (!tokenClient) {
+            console.error('❌ Token client not initialized');
+            return;
+        }
+
+        try {
+            // Silent refresh without user interaction
+            tokenClient.requestAccessToken({ prompt: '' });
+        } catch (err) {
+            console.error('❌ Token refresh failed:', err);
+            setError('토큰 갱신 실패. 다시 로그인해주세요.');
+            setIsSignedIn(false);
+        }
+    }, [tokenClient]);
+
     return {
         isSignedIn,
         isInitialized,
         error,
         signIn,
         signOut,
+        refreshToken,
+        isTokenValid,
         clearError: () => setError(null)
     };
 };

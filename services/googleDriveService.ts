@@ -10,7 +10,10 @@ declare global {
 
 export const getOauthToken = (): string | null => {
     const storedTokenString = localStorage.getItem('googleOauthToken');
-    if (!storedTokenString) return null;
+    if (!storedTokenString) {
+        console.warn('⚠️ No OAuth token found in localStorage');
+        return null;
+    }
 
     try {
         const token = JSON.parse(storedTokenString);
@@ -18,12 +21,16 @@ export const getOauthToken = (): string | null => {
         if (token?.accessToken && token.expiresAt > Date.now() + 60000) {
             return token.accessToken;
         }
+
+        // Token expired - log for debugging
+        console.warn('⚠️ OAuth token expired. Please re-authenticate.');
     } catch (e) {
-        console.error("Failed to parse OAuth token from localStorage", e);
+        console.error("❌ Failed to parse OAuth token from localStorage", e);
         // If parsing fails, remove the invalid item
         localStorage.removeItem('googleOauthToken');
         return null;
     }
+
     // Token expired or invalid
     localStorage.removeItem('googleOauthToken');
     return null;
@@ -53,10 +60,12 @@ export const generateFilename = (prefix: string, extension: 'txt', nameSourceCon
 export const saveToGoogleDrive = async (chartContent: string): Promise<void> => {
     const oauthToken = getOauthToken();
     if (!oauthToken) {
-        throw new Error("Google 계정 인증이 필요합니다.");
+        console.error('❌ saveToGoogleDrive: No valid OAuth token');
+        throw new Error("Google 로그인이 필요합니다. 토큰이 만료되었거나 로그인하지 않았습니다.");
     }
 
     if (!window.gapi?.client?.drive) {
+        console.error('❌ saveToGoogleDrive: Google Drive API not loaded');
         throw new Error("Google Drive API가 로드되지 않았습니다.");
     }
     
@@ -96,12 +105,18 @@ export const saveToGoogleDrive = async (chartContent: string): Promise<void> => 
 
 
 export const openDrivePicker = (
-    googleApiKey: string, 
+    googleApiKey: string,
     pickerCallback: (data: any) => void
 ) => {
     const oauthToken = getOauthToken();
-    if (!oauthToken || !window.google?.picker) {
-        throw new Error("인증 토큰이 없거나 Google Picker API가 로드되지 않았습니다. 먼저 로그인해주세요.");
+    if (!oauthToken) {
+        console.error('❌ openDrivePicker: No valid OAuth token');
+        throw new Error("Google 로그인이 필요합니다. 먼저 로그인해주세요.");
+    }
+
+    if (!window.google?.picker) {
+        console.error('❌ openDrivePicker: Google Picker API not loaded');
+        throw new Error("Google Picker API가 로드되지 않았습니다.");
     }
 
     const FOLDER_ID = '1XGJmZp53bm_o-zaDgEzMv36FIxEL2e1F';
@@ -124,8 +139,12 @@ export const downloadDriveFile = async (fileData: any): Promise<File> => {
     const oauthToken = getOauthToken();
 
     if (!oauthToken) {
-        throw new Error("인증 토큰이 만료되었습니다. 다시 로그인해주세요.");
+        console.error('❌ downloadDriveFile: No valid OAuth token');
+        throw new Error("Google 로그인이 필요합니다. 토큰이 만료되었거나 로그인하지 않았습니다.");
     }
+
+    console.log(`📥 Downloading file: ${fileData.name} (ID: ${fileId})`);
+
 
     const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
         headers: { 'Authorization': `Bearer ${oauthToken}` }

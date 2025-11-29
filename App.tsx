@@ -385,6 +385,15 @@ const App: React.FC = () => {
                     client_id: googleClientId,
                     scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/cloud-platform',
                     callback: (tokenResponse: any) => {
+                        console.log('Google OAuth Response:', tokenResponse);
+
+                        if (tokenResponse?.error) {
+                            const errorMsg = tokenResponse?.error_description || tokenResponse?.error || '알 수 없는 인증 오류';
+                            console.error('Google OAuth Error:', errorMsg);
+                            setError(`Google 인증 실패: ${errorMsg}`);
+                            return;
+                        }
+
                         if (tokenResponse?.access_token) {
                             const expiresAt = Date.now() + (tokenResponse.expires_in * 1000);
                             localStorage.setItem('googleOauthToken', JSON.stringify({
@@ -394,15 +403,17 @@ const App: React.FC = () => {
                             window.gapi.client.setToken({ access_token: tokenResponse.access_token });
                             setIsSignedIn(true);
                             setError(null);
+                            console.log('Google login successful');
                         } else {
-                            const errorMsg = tokenResponse?.error_description || tokenResponse?.error || '알 수 없는 인증 오류';
-                            setError(`Google 인증 실패: ${errorMsg}`);
+                            console.error('No access token in response');
+                            setError('Google 인증 실패: 액세스 토큰을 받지 못했습니다.');
                         }
                     },
                 });
                 setTokenClient(client);
             } catch (err) {
-                 setError("Google 인증 클라이언트 초기화에 실패했습니다. Client ID를 확인해주세요.");
+                console.error('Token client initialization error:', err);
+                setError("Google 인증 클라이언트 초기화에 실패했습니다. Client ID를 확인해주세요.");
             }
 
         } else {
@@ -417,7 +428,7 @@ const App: React.FC = () => {
 
   const handleSignIn = useCallback(() => {
     if (tokenClient) {
-        tokenClient.requestAccessToken({ prompt: '' });
+        tokenClient.requestAccessToken({ prompt: 'consent' });
     } else {
         setError("Google 인증 클라이언트가 초기화되지 않았습니다. 설정에서 API 키와 Client ID를 확인해주세요.");
         setIsSettingsOpen(true);

@@ -2,20 +2,23 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { transcribeWithGemini, generateSoapChart, analyzeSoapChart, verifyAndCorrectTranscript } from './services/geminiService.ts';
 import { getOauthToken, generateFilename, saveToGoogleDrive, openDrivePicker, downloadDriveFile } from './services/googleDriveService.ts';
 import { convertAudioToWav } from './utils/audioUtils.ts';
-import { 
-    MicrophoneIcon, 
-    StopIcon, 
-    CopyIcon, 
-    SaveIcon, 
+import { Settings } from './types';
+import { useGoogleAuth } from './hooks/useGoogleAuth';
+import { SettingsModal } from './components/SettingsModal';
+import { AnalysisModal } from './components/AnalysisModal';
+import { GoogleCalendarModal } from './components/GoogleCalendarModal';
+import {
+    MicrophoneIcon,
+    StopIcon,
+    CopyIcon,
+    SaveIcon,
     Spinner,
     SettingsIcon,
     GeminiIcon,
-    CloseIcon,
     DjdLogoIcon,
     OpenAIIcon,
     EditIcon,
     CheckIcon,
-    MarkdownIcon,
     AttachmentIcon,
     GoogleIcon,
     LogoutIcon,
@@ -27,292 +30,6 @@ import {
     SpeechifyIcon,
     GoogleDriveIcon
 } from './components/icons.tsx';
-
-// Extend gapi/google types on window
-declare global {
-    interface Window {
-        gapi: any;
-        google: any;
-    }
-}
-
-interface Settings {
-    geminiKey: string;
-    googleClientId: string;
-    googleApiKey: string;
-}
-
-const SettingsModal = ({ isOpen, onClose, onSave, currentSettings }: {
-    isOpen: boolean;
-    onClose: () => void;
-    onSave: (settings: Settings) => void;
-    currentSettings: Settings;
-}) => {
-    const [geminiKey, setGeminiKey] = useState(currentSettings.geminiKey);
-    const [googleClientId, setGoogleClientId] = useState(currentSettings.googleClientId);
-    const [googleApiKey, setGoogleApiKey] = useState(currentSettings.googleApiKey);
-
-
-    useEffect(() => {
-        setGeminiKey(currentSettings.geminiKey);
-        setGoogleClientId(currentSettings.googleClientId);
-        setGoogleApiKey(currentSettings.googleApiKey);
-    }, [currentSettings, isOpen]);
-
-    if (!isOpen) return null;
-
-    const handleSave = () => {
-        onSave({ geminiKey, googleClientId, googleApiKey });
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-            <div className="bg-gray-800 rounded-lg shadow-2xl p-6 sm:p-8 w-full max-w-md m-4">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-white flex items-center">
-                        <SettingsIcon className="w-6 h-6 mr-3" />
-                        설정
-                    </h2>
-                    <button onClick={onClose} className="p-1 rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors">
-                        <CloseIcon className="w-6 h-6" />
-                    </button>
-                </div>
-                
-                <div className="space-y-6">
-                    <div>
-                        <h3 className="text-lg font-semibold text-brand-primary mb-3 flex items-center">
-                            <GeminiIcon className="w-5 h-5 mr-2" />
-                            Google Gemini API
-                        </h3>
-                        <label htmlFor="gemini-key" className="block text-sm font-medium text-gray-300 mb-1">API Key (음성인식 / 차트생성용)</label>
-                        <input
-                            id="gemini-key"
-                            type="password"
-                            value={geminiKey}
-                            onChange={(e) => setGeminiKey(e.target.value)}
-                            className="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                            placeholder="Google Gemini API 키를 입력하세요"
-                        />
-                         <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-400 hover:text-brand-accent mt-1">
-                            API 키 발급받기
-                        </a>
-                    </div>
-                    <div className="border-t border-gray-700 pt-6">
-                        <h3 className="text-lg font-semibold text-brand-primary mb-3 flex items-center">
-                            <GoogleIcon className="w-5 h-5 mr-2" />
-                            Google Workspace API
-                        </h3>
-                        <div className="space-y-4">
-                            <div>
-                                <label htmlFor="google-client-id" className="block text-sm font-medium text-gray-300 mb-1">Client ID (로그인용)</label>
-                                <input
-                                    id="google-client-id"
-                                    type="password"
-                                    value={googleClientId}
-                                    onChange={(e) => setGoogleClientId(e.target.value)}
-                                    className="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                                    placeholder="Google Client ID를 입력하세요"
-                                />
-                            </div>
-                             <div>
-                                <label htmlFor="google-api-key" className="block text-sm font-medium text-gray-300 mb-1">API Key (Google API 호출용)</label>
-                                <input
-                                    id="google-api-key"
-                                    type="password"
-                                    value={googleApiKey}
-                                    onChange={(e) => setGoogleApiKey(e.target.value)}
-                                    className="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                                    placeholder="Google API Key를 입력하세요"
-                                />
-                            </div>
-                            <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-400 hover:text-brand-accent mt-1">
-                                인증 정보 발급받기
-                            </a>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="mt-8 flex justify-end">
-                    <button
-                        onClick={handleSave}
-                        className="bg-brand-primary hover:bg-brand-secondary text-white font-bold py-2 px-6 rounded-md transition-colors"
-                    >
-                        저장
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const AnalysisModal = ({ 
-    isOpen, 
-    onClose, 
-    result, 
-    isLoading,
-    isEditing,
-    onToggleEdit,
-    onContentChange,
-    onCopy,
-    onSave
-}: {
-    isOpen: boolean;
-    onClose: () => void;
-    result: string;
-    isLoading: boolean;
-    isEditing: boolean;
-    onToggleEdit: () => void;
-    onContentChange: (newContent: string) => void;
-    onCopy: () => void;
-    onSave: () => void;
-}) => {
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-            <div className="bg-gray-800 rounded-lg shadow-2xl p-6 sm:p-8 w-full max-w-2xl m-4 flex flex-col" style={{maxHeight: '90vh'}}>
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-white flex items-center">
-                        <GeminiIcon className="w-6 h-6 mr-3 text-brand-primary" />
-                        심층분석
-                    </h2>
-                    <div className="flex items-center space-x-2">
-                        {result && !isLoading && (
-                            <>
-                                <button onClick={onToggleEdit} className="p-2 rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors" aria-label={isEditing ? '수정 완료' : '수정'}>
-                                    {isEditing ? <CheckIcon className="w-5 h-5" /> : <EditIcon className="w-5 h-5" />}
-                                </button>
-                                <button onClick={onCopy} className="p-2 rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors" aria-label="클립보드에 복사">
-                                    <CopyIcon className="w-5 h-5" />
-                                </button>
-                                <button onClick={onSave} className="p-2 rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors" aria-label="텍스트 파일로 저장">
-                                    <SaveIcon className="w-5 h-5" />
-                                </button>
-                            </>
-                        )}
-                        <button onClick={onClose} className="p-1 rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors ml-2">
-                            <CloseIcon className="w-6 h-6" />
-                        </button>
-                    </div>
-                </div>
-                
-                <div className="flex-grow bg-gray-900 rounded-md p-4 overflow-y-auto text-gray-300">
-                    {isLoading ? (
-                        <div className="flex flex-col items-center justify-center h-full">
-                            <Spinner className="w-10 h-10 text-brand-primary" />
-                            <p className="mt-4 text-gray-400">잠시만 기다려주세요...</p>
-                        </div>
-                    ) : isEditing ? (
-                        <textarea
-                            value={result}
-                            onChange={(e) => onContentChange(e.target.value)}
-                            className="w-full h-full bg-transparent text-gray-300 resize-none focus:outline-none"
-                            spellCheck="false"
-                        />
-                    ) : (
-                        <div className="whitespace-pre-wrap">{result}</div>
-                    )}
-                </div>
-
-                <div className="mt-8 flex justify-end">
-                    <button
-                        onClick={onClose}
-                        className="bg-brand-primary hover:bg-brand-secondary text-white font-bold py-2 px-6 rounded-md transition-colors"
-                    >
-                        닫기
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-
-const GoogleCalendarModal = ({ isOpen, onClose, isSignedIn }: {
-    isOpen: boolean;
-    onClose: () => void;
-    isSignedIn: boolean;
-}) => {
-    const [events, setEvents] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    const listEvents = useCallback(async () => {
-        if (!isSignedIn) {
-            setError("Google 계정으로 로그인해주세요.");
-            setIsLoading(false);
-            return;
-        }
-        setIsLoading(true);
-        setError(null);
-        try {
-            const today = new Date();
-            const timeMin = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-            const timeMax = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
-
-            const response = await window.gapi.client.calendar.events.list({
-                'calendarId': 'primary',
-                'timeMin': timeMin,
-                'timeMax': timeMax,
-                'showDeleted': false,
-                'singleEvents': true,
-                'orderBy': 'startTime',
-            });
-            setEvents(response.result.items || []);
-        } catch (err: any) {
-            setError(`일정 로딩 실패: ${err.result?.error?.message || '알 수 없는 오류'}`);
-            console.error("Execute error", err);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [isSignedIn]);
-
-    useEffect(() => {
-        if (isOpen) {
-            listEvents();
-        }
-    }, [isOpen, listEvents]);
-    
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-            <div className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg m-4 flex flex-col" style={{minHeight: '20rem'}}>
-                <div className="bg-white p-3 rounded-t-lg flex justify-between items-center text-black">
-                    <h2 className="text-xl font-bold flex items-center">
-                        <GoogleCalendarIcon className="w-6 h-6 mr-2" />
-                        Google Calendar
-                    </h2>
-                     <div className="flex items-center space-x-2">
-                        <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-200 transition-colors">
-                            <CloseIcon className="w-6 h-6" />
-                        </button>
-                    </div>
-                </div>
-                
-                <div className="flex-grow p-6 flex flex-col items-center justify-center">
-                    {isLoading ? (
-                        <Spinner className="w-10 h-10 text-brand-primary" />
-                    ) : error ? (
-                        <p className="text-red-400 text-center">{error}</p>
-                    ) : !isSignedIn ? (
-                         <p className="text-gray-400">Google 계정으로 로그인 후 이용 가능합니다.</p>
-                    ) : events.length > 0 ? (
-                        <ul className="w-full space-y-2">
-                            {events.map(event => (
-                                <li key={event.id} className="bg-gray-700 p-3 rounded-md text-gray-200">
-                                    {event.summary}
-                                </li>
-                            ))}
-                        </ul>
-                    ) : (
-                        <p className="text-gray-400">오늘 일정이 없습니다.</p>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-};
 
 const App: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
@@ -332,140 +49,32 @@ const App: React.FC = () => {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
 
-  // API Keys and Auth State
+  // API Keys
   const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('geminiApiKey') || '');
   const [googleClientId, setGoogleClientId] = useState(() => localStorage.getItem('googleClientId') || '');
   const [googleApiKey, setGoogleApiKey] = useState(() => localStorage.getItem('googleApiKey') || '');
-  const [isSignedIn, setIsSignedIn] = useState(false);
-  const [tokenClient, setTokenClient] = useState<any>(null);
+
+  // Google Authentication (using custom hook)
+  const { isSignedIn, signIn: handleSignIn, signOut: handleSignOut, error: googleAuthError } = useGoogleAuth(googleClientId, googleApiKey);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingStartTimeRef = useRef<Date | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Show settings if no Gemini API key
   useEffect(() => {
     if (!geminiApiKey) {
       setIsSettingsOpen(true);
     }
   }, [geminiApiKey]);
 
-  // Google API Initialization
+  // Display Google Auth errors
   useEffect(() => {
-    const checkGoogleReady = () => {
-        if (window.gapi && window.google) {
-            console.log('Google APIs loaded successfully');
-
-            // GAPI for API calls (Calendar, Drive)
-            window.gapi.load('client:picker', async () => {
-                try {
-                    console.log('Initializing GAPI client with API Key:', googleApiKey ? 'Set' : 'Not Set');
-                    await window.gapi.client.init({
-                        apiKey: googleApiKey,
-                        discoveryDocs: [
-                            'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest',
-                            'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'
-                        ],
-                    });
-                    console.log('GAPI client initialized successfully');
-
-                    const storedTokenString = localStorage.getItem('googleOauthToken');
-                    if (storedTokenString) {
-                        const token = JSON.parse(storedTokenString);
-                        if (token?.accessToken && token.expiresAt > Date.now() + 60000) {
-                            window.gapi.client.setToken({ access_token: token.accessToken });
-                            setIsSignedIn(true);
-                            console.log('Restored previous login session');
-                        } else {
-                            localStorage.removeItem('googleOauthToken');
-                            console.log('Previous token expired, removed from storage');
-                        }
-                    }
-                } catch (err) {
-                    console.error('GAPI client initialization error:', err);
-                    setError("Google API 클라이언트 초기화에 실패했습니다. API 키를 확인해주세요.");
-                }
-            });
-
-            // GIS for OAuth2
-            try {
-                console.log('Initializing OAuth2 token client with Client ID:', googleClientId ? 'Set' : 'Not Set');
-                const client = window.google.accounts.oauth2.initTokenClient({
-                    client_id: googleClientId,
-                    scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/cloud-platform',
-                    callback: (tokenResponse: any) => {
-                        console.log('Google OAuth Response:', tokenResponse);
-
-                        if (tokenResponse?.error) {
-                            const errorMsg = tokenResponse?.error_description || tokenResponse?.error || '알 수 없는 인증 오류';
-                            console.error('Google OAuth Error:', errorMsg);
-                            setError(
-                                <>
-                                    Google 인증 실패: {errorMsg}<br />
-                                    <span className="text-sm">Google Cloud Console에서 승인된 자바스크립트 원본을 확인해주세요.</span>
-                                </>
-                            );
-                            return;
-                        }
-
-                        if (tokenResponse?.access_token) {
-                            const expiresAt = Date.now() + (tokenResponse.expires_in * 1000);
-                            localStorage.setItem('googleOauthToken', JSON.stringify({
-                                accessToken: tokenResponse.access_token,
-                                expiresAt: expiresAt,
-                            }));
-                            window.gapi.client.setToken({ access_token: tokenResponse.access_token });
-                            setIsSignedIn(true);
-                            setError(null);
-                            console.log('Google login successful');
-                        } else {
-                            console.error('No access token in response');
-                            setError('Google 인증 실패: 액세스 토큰을 받지 못했습니다.');
-                        }
-                    },
-                });
-                setTokenClient(client);
-                console.log('OAuth2 token client initialized successfully');
-            } catch (err) {
-                console.error('Token client initialization error:', err);
-                setError("Google 인증 클라이언트 초기화에 실패했습니다. Client ID를 확인해주세요.");
-            }
-
-        } else {
-            setTimeout(checkGoogleReady, 100);
-        }
-    };
-    if (googleClientId && googleApiKey) {
-        checkGoogleReady();
+    if (googleAuthError) {
+      setError(googleAuthError);
     }
-  }, [googleClientId, googleApiKey]);
-
-
-  const handleSignIn = useCallback(() => {
-    console.log('handleSignIn called, tokenClient:', tokenClient ? 'Available' : 'Not Available');
-    if (tokenClient) {
-        console.log('Requesting access token with prompt: consent');
-        tokenClient.requestAccessToken({ prompt: 'consent' });
-    } else {
-        console.error('Token client not initialized');
-        setError("Google 인증 클라이언트가 초기화되지 않았습니다. 설정에서 API 키와 Client ID를 확인해주세요.");
-        setIsSettingsOpen(true);
-    }
-  }, [tokenClient]);
-
-  const handleSignOut = useCallback(() => {
-    const storedTokenString = localStorage.getItem('googleOauthToken');
-    if (storedTokenString) {
-        try {
-            const token = JSON.parse(storedTokenString);
-            if (token?.accessToken && window.google?.accounts?.oauth2) {
-                window.google.accounts.oauth2.revoke(token.accessToken, () => {});
-            }
-        } catch {}
-    }
-    localStorage.removeItem('googleOauthToken');
-    setIsSignedIn(false);
-  }, []);
+  }, [googleAuthError]);
 
   const handleGenerateChart = useCallback(async (
     transcriptText: string,

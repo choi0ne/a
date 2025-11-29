@@ -354,9 +354,12 @@ const App: React.FC = () => {
   useEffect(() => {
     const checkGoogleReady = () => {
         if (window.gapi && window.google) {
+            console.log('Google APIs loaded successfully');
+
             // GAPI for API calls (Calendar, Drive)
             window.gapi.load('client:picker', async () => {
                 try {
+                    console.log('Initializing GAPI client with API Key:', googleApiKey ? 'Set' : 'Not Set');
                     await window.gapi.client.init({
                         apiKey: googleApiKey,
                         discoveryDocs: [
@@ -364,23 +367,29 @@ const App: React.FC = () => {
                             'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'
                         ],
                     });
+                    console.log('GAPI client initialized successfully');
+
                     const storedTokenString = localStorage.getItem('googleOauthToken');
                     if (storedTokenString) {
                         const token = JSON.parse(storedTokenString);
                         if (token?.accessToken && token.expiresAt > Date.now() + 60000) {
                             window.gapi.client.setToken({ access_token: token.accessToken });
                             setIsSignedIn(true);
+                            console.log('Restored previous login session');
                         } else {
                             localStorage.removeItem('googleOauthToken');
+                            console.log('Previous token expired, removed from storage');
                         }
                     }
                 } catch (err) {
+                    console.error('GAPI client initialization error:', err);
                     setError("Google API 클라이언트 초기화에 실패했습니다. API 키를 확인해주세요.");
                 }
             });
 
             // GIS for OAuth2
             try {
+                console.log('Initializing OAuth2 token client with Client ID:', googleClientId ? 'Set' : 'Not Set');
                 const client = window.google.accounts.oauth2.initTokenClient({
                     client_id: googleClientId,
                     scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/cloud-platform',
@@ -390,7 +399,12 @@ const App: React.FC = () => {
                         if (tokenResponse?.error) {
                             const errorMsg = tokenResponse?.error_description || tokenResponse?.error || '알 수 없는 인증 오류';
                             console.error('Google OAuth Error:', errorMsg);
-                            setError(`Google 인증 실패: ${errorMsg}`);
+                            setError(
+                                <>
+                                    Google 인증 실패: {errorMsg}<br />
+                                    <span className="text-sm">Google Cloud Console에서 승인된 자바스크립트 원본을 확인해주세요.</span>
+                                </>
+                            );
                             return;
                         }
 
@@ -411,6 +425,7 @@ const App: React.FC = () => {
                     },
                 });
                 setTokenClient(client);
+                console.log('OAuth2 token client initialized successfully');
             } catch (err) {
                 console.error('Token client initialization error:', err);
                 setError("Google 인증 클라이언트 초기화에 실패했습니다. Client ID를 확인해주세요.");
@@ -427,9 +442,12 @@ const App: React.FC = () => {
 
 
   const handleSignIn = useCallback(() => {
+    console.log('handleSignIn called, tokenClient:', tokenClient ? 'Available' : 'Not Available');
     if (tokenClient) {
+        console.log('Requesting access token with prompt: consent');
         tokenClient.requestAccessToken({ prompt: 'consent' });
     } else {
+        console.error('Token client not initialized');
         setError("Google 인증 클라이언트가 초기화되지 않았습니다. 설정에서 API 키와 Client ID를 확인해주세요.");
         setIsSettingsOpen(true);
     }

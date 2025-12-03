@@ -1,6 +1,15 @@
-
-
-
+/**
+ * Gemini AI Service
+ *
+ * This service handles all AI operations (transcription, chart generation, analysis).
+ *
+ * AUTHENTICATION:
+ * - Uses simple Gemini API key (NOT Google OAuth)
+ * - API key stored in localStorage as 'geminiApiKey'
+ * - No user login required - just an API key
+ *
+ * NOTE: This is completely separate from Google Drive/Calendar OAuth authentication
+ */
 
 import { GoogleGenAI } from '@google/genai';
 import { splitAudioBlob } from '../utils/audioUtils.ts';
@@ -30,8 +39,8 @@ const MAX_RETRIES = 2; // Try original + 1 retry
 const RETRY_DELAY_MS = 1500;
 
 async function callGeminiWithRetry(
-    geminiApiKey: string | undefined, 
-    request: any, 
+    geminiApiKey: string | undefined,
+    request: any,
     errorContext: string,
     model = PRIMARY_MODEL
 ): Promise<string> {
@@ -53,7 +62,7 @@ async function callGeminiWithRetry(
             console.error(`Gemini API call for '${errorContext}' attempt ${attempt} with model ${model} failed:`, e);
 
             if (attempt === MAX_RETRIES) {
-                break; 
+                break;
             }
             await sleep(RETRY_DELAY_MS * attempt);
         }
@@ -68,7 +77,7 @@ async function callGeminiWithRetry(
             isInternalError = true;
         }
     } catch (e) { /* ignore parse error */ }
-    
+
     if (isInternalError && model === PRIMARY_MODEL) {
         console.warn(`Primary model '${PRIMARY_MODEL}' failed with internal error. Attempting fallback with '${FALLBACK_MODEL}'.`);
         try {
@@ -93,7 +102,7 @@ async function callGeminiWithRetry(
         }
         throw new Error(`${errorContext} 중 오류 발생: ${errorMessage}`);
     }
-    
+
     throw new Error(`${errorContext}에 최종적으로 실패했습니다.`);
 }
 
@@ -161,15 +170,15 @@ export async function transcribeWithGemini(
         try {
             const audioChunks = await splitAudioBlob(audioBlob, CHUNK_SIZE_BYTES);
             console.log(`${audioChunks.length}개의 파일로 분할되었습니다. 병렬로 전사를 시작합니다.`);
-            
+
             const transcriptionPromises = audioChunks.map((chunk, index) => {
                 console.log(`분할 파일 ${index + 1}/${audioChunks.length} 전사 중...`);
                 return transcribeSingleAudioBlob(geminiApiKey, chunk, true);
             });
-            
+
             const transcriptions = await Promise.all(transcriptionPromises);
             console.log('모든 분할 파일의 전사가 완료되었습니다. 결과를 병합합니다.');
-            
+
             return transcriptions.join(' ').trim();
         } catch (error) {
             console.error("대용량 오디오 파일 처리 중 오류 발생:", error);
@@ -204,7 +213,7 @@ export async function verifyAndCorrectTranscript(geminiApiKey: string | undefine
     if (!transcript.trim()) {
         return transcript;
     }
-    
+
     const request = {
         contents: getVerificationPrompt(transcript),
         config: {

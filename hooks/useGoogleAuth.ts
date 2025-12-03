@@ -1,3 +1,17 @@
+/**
+ * Google OAuth Authentication Hook
+ *
+ * Manages Google OAuth 2.0 authentication for Google Workspace APIs (Drive, Calendar).
+ *
+ * AUTHENTICATION FLOW:
+ * 1. Initializes GAPI client with googleDeveloperKey
+ * 2. Initializes OAuth token client with googleClientId
+ * 3. Stores OAuth access token in localStorage as 'googleOauthToken'
+ * 4. Auto-refreshes token 5 minutes before expiration
+ *
+ * NOTE: This is completely separate from Gemini API key authentication
+ */
+
 import { useState, useEffect, useCallback } from 'react';
 import { GoogleOAuthToken } from '../types';
 
@@ -8,7 +22,7 @@ declare global {
     }
 }
 
-export const useGoogleAuth = (googleClientId: string, googleApiKey: string) => {
+export const useGoogleAuth = (googleClientId: string, googleDeveloperKey: string) => {
     const [isSignedIn, setIsSignedIn] = useState(false);
     const [tokenClient, setTokenClient] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
@@ -55,7 +69,7 @@ export const useGoogleAuth = (googleClientId: string, googleApiKey: string) => {
 
     // Initialize Google APIs
     useEffect(() => {
-        if (!googleClientId || !googleApiKey) {
+        if (!googleClientId || !googleDeveloperKey) {
             console.log('Google credentials not set');
             return;
         }
@@ -72,7 +86,7 @@ export const useGoogleAuth = (googleClientId: string, googleApiKey: string) => {
             window.gapi.load('client:picker', async () => {
                 try {
                     await window.gapi.client.init({
-                        apiKey: googleApiKey,
+                        apiKey: googleDeveloperKey,
                         discoveryDocs: [
                             'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest',
                             'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'
@@ -156,7 +170,7 @@ export const useGoogleAuth = (googleClientId: string, googleApiKey: string) => {
         };
 
         initializeGoogleAPIs();
-    }, [googleClientId, googleApiKey]);
+    }, [googleClientId, googleDeveloperKey]);
 
     const signIn = useCallback(() => {
         console.log('🔐 Sign in requested');

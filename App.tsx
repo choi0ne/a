@@ -587,12 +587,14 @@ const App: React.FC = () => {
                         <GoogleDriveIcon className="w-4 h-4" />
                         <span>Google Drive</span>
                     </a>
-                    <a href="https://re-visit.kr/dongjedang/hospital/reception/list" target="_blank" rel="noopener noreferrer" className="bg-gray-900 text-gray-300 hover:bg-gray-700 hover:text-white w-20 text-center px-2 py-1 rounded-md transition-colors text-xs font-medium" title="Re-visit">
-                        Re-visit
-                    </a>
-                    <a href="https://reservation.docfriends.com/?stateTypes=&reservationDate=dateTime&gte=2025-12-03&lte=2025-12-09&platformTypes=&productUuids=&bookingName=bookerName&bookingNameText=&reservationUuid=" target="_blank" rel="noopener noreferrer" className="bg-gray-900 text-gray-300 hover:bg-gray-700 hover:text-white w-20 text-center px-2 py-1 rounded-md transition-colors text-xs font-medium" title="DocTalk">
-                        DocTalk
-                    </a>
+                    <div className="flex flex-row gap-2 w-40">
+                        <a href="https://re-visit.kr/dongjedang/hospital/reception/list" target="_blank" rel="noopener noreferrer" className="bg-gray-900 text-gray-300 hover:bg-gray-700 hover:text-white flex-1 text-center px-2 py-1 rounded-md transition-colors text-xs font-medium" title="Re-visit">
+                            Re-visit
+                        </a>
+                        <a href="https://reservation.docfriends.com/?stateTypes=&reservationDate=dateTime&gte=2025-12-03&lte=2025-12-09&platformTypes=&productUuids=&bookingName=bookerName&bookingNameText=&reservationUuid=" target="_blank" rel="noopener noreferrer" className="bg-gray-900 text-gray-300 hover:bg-gray-700 hover:text-white flex-1 text-center px-2 py-1 rounded-md transition-colors text-xs font-medium" title="DocTalk">
+                            DocTalk
+                        </a>
+                    </div>
                     <a href="https://aha-emr-assistant-394050950645.us-west1.run.app/" target="_blank" rel="noopener noreferrer" className="bg-gray-900 text-gray-300 hover:bg-gray-700 hover:text-white w-40 text-right px-3 py-1 rounded-md transition-colors text-xs font-medium" title="AHA">
                         AHA
                     </a>

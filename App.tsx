@@ -723,7 +723,7 @@ const App: React.FC = () => {
               onDrop={handleDrop}
               onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
               onDragEnter={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
-              onDragLeave={(e) => { setIsDraggingOver(false); }}
+              onDragLeave={() => { setIsDraggingOver(false); }}
             >
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold text-white">음성/텍스트 입력</h2>

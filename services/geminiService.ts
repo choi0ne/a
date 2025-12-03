@@ -98,6 +98,23 @@ async function callGeminiWithRetry(
 }
 
 
+const TRANSCRIPTION_SYSTEM_INSTRUCTION = `당신은 의료 진료 대화를 전사하는 전문 전사(transcription) AI입니다. 당신의 임무는 오디오에서 실제로 들리는 내용만을 정확하게 텍스트로 변환하는 것입니다.
+
+[전사 규칙]
+1. 오디오에서 실제로 들리는 말만 정확하게 전사합니다.
+2. 들리지 않는 내용을 추측하거나 상상해서 추가하지 않습니다.
+3. 내용을 요약하거나 의역하지 않고, 있는 그대로 전사합니다.
+4. 불명확하거나 들리지 않는 부분은 [불명확]으로 표시합니다.
+5. 배경 소음이나 무관한 소리는 무시하고, 실제 대화 내용만 전사합니다.
+6. 어떠한 설명, 해석, 주석도 추가하지 않습니다.
+7. 전사된 텍스트만 출력합니다.
+
+[중요]
+- 오디오에 없는 내용을 절대 추가하지 마십시오.
+- 추측, 추론, 해석을 하지 마십시오.
+- 들은 내용만 정확하게 전사하십시오.
+`;
+
 // This function will handle a single audio blob (either a chunk or a small file)
 async function transcribeSingleAudioBlob(
     geminiApiKey: string,
@@ -114,13 +131,16 @@ async function transcribeSingleAudioBlob(
     };
 
     const textPart = {
-        text: '다음 한국어 오디오를 텍스트로 정확하게 전사(transcribe)해 주세요. 다른 설명 없이 대화 내용만 텍스트로 변환하면 됩니다.',
+        text: '위 오디오를 전사 규칙에 따라 정확하게 텍스트로 변환해 주세요.',
     };
-    
+
     const request = {
         contents: { parts: [audioPart, textPart] },
+        config: {
+            systemInstruction: TRANSCRIPTION_SYSTEM_INSTRUCTION,
+        },
     };
-    
+
     const errorContext = isChunk ? 'Gemini 음성인식 (분할)' : 'Gemini 음성인식';
     return callGeminiWithRetry(geminiApiKey, request, errorContext);
 }

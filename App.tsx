@@ -584,7 +584,7 @@ const App: React.FC = () => {
                     <a href="https://aha-emr-assistant-394050950645.us-west1.run.app/" target="_blank" rel="noopener noreferrer" className="bg-gray-900 text-gray-300 hover:bg-gray-700 hover:text-white w-40 text-right px-3 py-1 rounded-md transition-colors text-xs font-medium" title="AHA">
                         AHA
                     </a>
-                    <a href="https://djd-diagnosis-v2-0-1036827603413.us-west1.run.app/" target="_blank" rel="noopener noreferrer" className="bg-gray-900 text-gray-300 hover:bg-gray-700 hover:text-white w-40 text-right px-3 py-1 rounded-md transition-colors text-xs font-medium" title="DJD">
+                    <a href="https://djd-diagnosisv2.netlify.app/" target="_blank" rel="noopener noreferrer" className="bg-gray-900 text-gray-300 hover:bg-gray-700 hover:text-white w-40 text-right px-3 py-1 rounded-md transition-colors text-xs font-medium" title="DJD">
                         DJD
                     </a>
                 </nav>
@@ -723,7 +723,7 @@ const App: React.FC = () => {
               onDrop={handleDrop}
               onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
               onDragEnter={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
-              onDragLeave={(e) => { setIsDraggingOver(false); }}
+              onDragLeave={() => { setIsDraggingOver(false); }}
             >
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold text-white">음성/텍스트 입력</h2>

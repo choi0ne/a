@@ -6,7 +6,10 @@ export interface Settings {
 
 export interface GoogleOAuthToken {
     accessToken: string;
+    refreshToken?: string;  // Added for OAuth 2.0 PKCE flow
     expiresAt: number;
+    tokenType?: string;     // Usually "Bearer"
+    scope?: string;         // Granted scopes
 }
 
 export interface CalendarEvent {

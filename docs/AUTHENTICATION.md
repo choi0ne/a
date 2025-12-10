@@ -35,9 +35,10 @@
 - Google Picker (파일 선택)
 
 ### 인증 방식
-- **OAuth 2.0** 사용
+- **OAuth 2.0 Authorization Code Flow with PKCE** 사용
 - 사용자 Google 계정 로그인 필요
-- Access Token 발급 및 자동 갱신
+- **Refresh Token** 완전 지원 (무제한 자동 갱신)
+- 서버 불필요 (브라우저만으로 안전한 인증)
 
 ### 설정
 - **변수명**:
@@ -50,19 +51,58 @@
 - **설정 화면**: "Google Workspace API" 섹션
 - **발급 URL**: https://console.cloud.google.com/apis/credentials
 
+### OAuth 클라이언트 설정 요구사항
+⚠️ **중요**: Google Cloud Console에서 OAuth 클라이언트 생성 시:
+1. **애플리케이션 유형**: "웹 애플리케이션" 선택
+2. **승인된 리디렉션 URI**에 추가:
+   - `http://localhost:5173/oauth-callback` (개발 환경)
+   - `https://yourdomain.com/oauth-callback` (프로덕션 환경)
+3. **승인된 JavaScript 원본**에 추가:
+   - `http://localhost:5173` (개발 환경)
+   - `https://yourdomain.com` (프로덕션 환경)
+
 ### 토큰 관리
 - **자동 갱신**: 만료 5분 전 자동으로 갱신
-- **유효성 검사**: 5분마다 토큰 유효성 확인
+- **갱신 방식**: Refresh Token 사용 (Google 세션 불필요)
 - **저장 형식**:
   ```json
   {
     "accessToken": "ya29...",
-    "expiresAt": 1234567890000
+    "refreshToken": "1//...",  // 🎉 진짜 refresh token!
+    "expiresAt": 1234567890000,
+    "tokenType": "Bearer",
+    "scope": "https://www.googleapis.com/auth/..."
   }
   ```
 
+### 인증 플로우
+1. 사용자가 "Google 로그인" 클릭
+2. Google OAuth 동의 페이지로 리디렉션
+3. 사용자 권한 승인
+4. Authorization Code와 함께 앱으로 리디렉션
+5. PKCE를 사용하여 Code를 Token으로 교환
+6. Access Token + **Refresh Token** 발급
+7. localStorage에 토큰 저장
+8. 이후 Access Token 만료 시 Refresh Token으로 자동 갱신
+
+### 주요 개선사항 (2025-12-06)
+✅ **Refresh Token 완전 지원**
+- 이전: Cookie 기반 자동 갱신 (Google 세션 필요)
+- 현재: Refresh Token 기반 (무제한 자동 갱신)
+
+✅ **PKCE (Proof Key for Code Exchange)**
+- 브라우저에서 안전하게 OAuth 사용
+- Client Secret 불필요
+- CSRF 공격 방지
+
+✅ **무제한 토큰 갱신**
+- Google 로그아웃해도 앱 세션 유지
+- 브라우저 쿠키 삭제해도 영향 없음
+- 한 번 로그인하면 Refresh Token으로 계속 갱신
+
 ### 관련 파일
-- `hooks/useGoogleAuth.ts` - OAuth 인증 관리
+- `hooks/useGoogleAuth.ts` - OAuth 인증 관리 (PKCE Flow)
+- `utils/oauth.ts` - OAuth 헬퍼 함수 (PKCE, Token Exchange, Refresh)
 - `services/googleDriveService.ts` - Drive API 호출
 - `App.tsx` - 로그인/로그아웃 UI
 

@@ -1,19 +1,34 @@
 /**
  * Google OAuth Authentication Hook
  *
- * Manages Google OAuth 2.0 authentication for Google Workspace APIs (Drive, Calendar).
+ * Manages Google OAuth 2.0 authentication using Authorization Code Flow with PKCE.
  *
  * AUTHENTICATION FLOW:
- * 1. Initializes GAPI client with googleDeveloperKey
- * 2. Initializes OAuth token client with googleClientId
- * 3. Stores OAuth access token in localStorage as 'googleOauthToken'
- * 4. Auto-refreshes token 5 minutes before expiration
+ * 1. User clicks sign in → opens OAuth consent page
+ * 2. User authorizes → redirected back with authorization code
+ * 3. Exchange code for tokens (access_token + refresh_token)
+ * 4. Store tokens in localStorage
+ * 5. Auto-refresh access_token using refresh_token before expiration
+ *
+ * KEY IMPROVEMENTS:
+ * ✅ Real refresh_token support (unlimited auto-renewal)
+ * ✅ No dependency on Google session cookies
+ * ✅ Works offline after initial authorization
+ * ✅ PKCE for security (no client secret needed)
  *
  * NOTE: This is completely separate from Gemini API key authentication
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { GoogleOAuthToken } from '../types';
+import {
+    buildAuthUrl,
+    exchangeCodeForTokens,
+    refreshAccessToken,
+    revokeToken,
+    parseOAuthCallback,
+    verifyState
+} from '../utils/oauth';
 
 declare global {
     interface Window {
@@ -22,17 +37,24 @@ declare global {
     }
 }
 
+const SCOPES = [
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/drive.readonly'
+];
+
 export const useGoogleAuth = (googleClientId: string, googleDeveloperKey: string) => {
     const [isSignedIn, setIsSignedIn] = useState(false);
-    const [tokenClient, setTokenClient] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
     const [isInitialized, setIsInitialized] = useState(false);
+    const [isAuthenticating, setIsAuthenticating] = useState(false);
+    const refreshTimeoutRef = useRef<number | null>(null);
 
     // Auto-refresh token before expiration
     useEffect(() => {
-        if (!isSignedIn || !tokenClient) return;
+        if (!isSignedIn || !googleClientId) return;
 
-        const checkAndRefreshToken = () => {
+        const scheduleTokenRefresh = () => {
             const storedToken = localStorage.getItem('googleOauthToken');
             if (!storedToken) {
                 console.log('⚠️ No token found, signing out');
@@ -44,28 +66,130 @@ export const useGoogleAuth = (googleClientId: string, googleDeveloperKey: string
                 const token: GoogleOAuthToken = JSON.parse(storedToken);
                 const timeUntilExpiry = token.expiresAt - Date.now();
 
-                // If token expires in less than 5 minutes, refresh it
+                // If token expires in less than 5 minutes, refresh it now
                 if (timeUntilExpiry < 5 * 60 * 1000) {
                     console.log('🔄 Token expiring soon, refreshing...');
-
-                    // Silent refresh (no prompt)
-                    tokenClient.requestAccessToken({ prompt: '' });
+                    performTokenRefresh();
                 } else {
-                    console.log(`✅ Token valid for ${Math.floor(timeUntilExpiry / 60000)} more minutes`);
+                    // Schedule refresh for 5 minutes before expiration
+                    const refreshTime = timeUntilExpiry - (5 * 60 * 1000);
+                    console.log(`⏰ Token refresh scheduled in ${Math.floor(refreshTime / 60000)} minutes`);
+
+                    refreshTimeoutRef.current = window.setTimeout(() => {
+                        performTokenRefresh();
+                    }, refreshTime);
                 }
             } catch (e) {
-                console.error('Failed to check token:', e);
+                console.error('Failed to schedule token refresh:', e);
             }
         };
 
-        // Check immediately
-        checkAndRefreshToken();
+        const performTokenRefresh = async () => {
+            const storedToken = localStorage.getItem('googleOauthToken');
+            if (!storedToken) return;
 
-        // Then check every 5 minutes
-        const intervalId = setInterval(checkAndRefreshToken, 5 * 60 * 1000);
+            try {
+                const token: GoogleOAuthToken = JSON.parse(storedToken);
 
-        return () => clearInterval(intervalId);
-    }, [isSignedIn, tokenClient]);
+                if (!token.refreshToken) {
+                    console.error('❌ No refresh token available');
+                    setError('리프레시 토큰이 없습니다. 다시 로그인해주세요.');
+                    setIsSignedIn(false);
+                    return;
+                }
+
+                // Use refresh token to get new access token
+                const newToken = await refreshAccessToken(token.refreshToken, googleClientId);
+
+                // Update stored token
+                localStorage.setItem('googleOauthToken', JSON.stringify(newToken));
+
+                // Update GAPI client token
+                if (window.gapi?.client) {
+                    window.gapi.client.setToken({ access_token: newToken.accessToken });
+                }
+
+                console.log('✅ Token refreshed successfully');
+
+                // Schedule next refresh
+                scheduleTokenRefresh();
+            } catch (e) {
+                console.error('❌ Token refresh failed:', e);
+                setError('토큰 갱신 실패. 다시 로그인해주세요.');
+                setIsSignedIn(false);
+            }
+        };
+
+        // Initial schedule
+        scheduleTokenRefresh();
+
+        return () => {
+            if (refreshTimeoutRef.current) {
+                clearTimeout(refreshTimeoutRef.current);
+            }
+        };
+    }, [isSignedIn, googleClientId]);
+
+    // Handle OAuth callback (when redirected back from Google)
+    useEffect(() => {
+        const handleOAuthCallback = async () => {
+            const urlParams = parseOAuthCallback(window.location.href);
+
+            // Check if this is an OAuth callback
+            if (!urlParams.code && !urlParams.error) {
+                return; // Not an OAuth callback
+            }
+
+            console.log('🔐 OAuth callback detected');
+            setIsAuthenticating(true);
+
+            try {
+                // Handle errors
+                if (urlParams.error) {
+                    throw new Error(urlParams.error);
+                }
+
+                // Verify state for CSRF protection
+                if (urlParams.state && !verifyState(urlParams.state)) {
+                    throw new Error('State mismatch - possible CSRF attack');
+                }
+
+                // Exchange code for tokens
+                if (urlParams.code) {
+                    console.log('🔄 Exchanging code for tokens...');
+                    const token = await exchangeCodeForTokens(urlParams.code, googleClientId);
+
+                    // Store token
+                    localStorage.setItem('googleOauthToken', JSON.stringify(token));
+
+                    // Set GAPI client token
+                    if (window.gapi?.client) {
+                        window.gapi.client.setToken({ access_token: token.accessToken });
+                    }
+
+                    setIsSignedIn(true);
+                    setError(null);
+                    console.log('✅ Login successful with refresh token!');
+
+                    // Clean up URL (remove OAuth parameters)
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            } catch (err: any) {
+                console.error('❌ OAuth callback error:', err);
+                setError(`인증 실패: ${err.message}`);
+                setIsSignedIn(false);
+
+                // Clean up URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+            } finally {
+                setIsAuthenticating(false);
+            }
+        };
+
+        if (googleClientId) {
+            handleOAuthCallback();
+        }
+    }, [googleClientId]);
 
     // Initialize Google APIs
     useEffect(() => {
@@ -75,7 +199,7 @@ export const useGoogleAuth = (googleClientId: string, googleDeveloperKey: string
         }
 
         const initializeGoogleAPIs = () => {
-            if (!window.gapi || !window.google) {
+            if (!window.gapi) {
                 setTimeout(initializeGoogleAPIs, 100);
                 return;
             }
@@ -99,115 +223,95 @@ export const useGoogleAuth = (googleClientId: string, googleDeveloperKey: string
                     if (storedToken) {
                         try {
                             const token: GoogleOAuthToken = JSON.parse(storedToken);
+                            // Check if token is still valid (with 1 minute buffer)
                             if (token.accessToken && token.expiresAt > Date.now() + 60000) {
                                 window.gapi.client.setToken({ access_token: token.accessToken });
                                 setIsSignedIn(true);
                                 console.log('✅ Session restored from storage');
+                            } else if (token.refreshToken) {
+                                // Token expired but we have refresh token - will auto-refresh
+                                setIsSignedIn(true);
+                                console.log('⚠️ Access token expired, will refresh automatically');
                             } else {
                                 localStorage.removeItem('googleOauthToken');
-                                console.log('⚠️ Stored token expired');
+                                console.log('⚠️ Stored token expired and no refresh token');
                             }
                         } catch (e) {
                             console.error('Failed to parse stored token:', e);
                             localStorage.removeItem('googleOauthToken');
                         }
                     }
+
+                    setIsInitialized(true);
                 } catch (err) {
                     console.error('❌ GAPI initialization failed:', err);
                     setError('Google API 초기화 실패. API 키를 확인해주세요.');
                 }
             });
-
-            // Initialize GIS (for OAuth)
-            try {
-                const client = window.google.accounts.oauth2.initTokenClient({
-                    client_id: googleClientId,
-                    scope: [
-                        'https://www.googleapis.com/auth/calendar.readonly',
-                        'https://www.googleapis.com/auth/drive.file',
-                        'https://www.googleapis.com/auth/drive.readonly'
-                    ].join(' '),
-                    callback: (response: any) => {
-                        console.log('🔑 OAuth callback received:', response);
-
-                        // Handle errors first
-                        if (response.error) {
-                            const errorMsg = response.error_description || response.error;
-                            console.error('❌ OAuth error:', errorMsg);
-                            setError(`인증 실패: ${errorMsg}`);
-                            setIsSignedIn(false);
-                            return;
-                        }
-
-                        // Handle success
-                        if (response.access_token) {
-                            const expiresAt = Date.now() + (response.expires_in * 1000);
-                            const token: GoogleOAuthToken = {
-                                accessToken: response.access_token,
-                                expiresAt
-                            };
-
-                            localStorage.setItem('googleOauthToken', JSON.stringify(token));
-                            window.gapi.client.setToken({ access_token: response.access_token });
-                            setIsSignedIn(true);
-                            setError(null);
-                            console.log('✅ Login successful');
-                        } else {
-                            console.error('❌ No access token in response');
-                            setError('액세스 토큰을 받지 못했습니다.');
-                            setIsSignedIn(false);
-                        }
-                    },
-                });
-
-                setTokenClient(client);
-                setIsInitialized(true);
-                console.log('✅ OAuth client initialized');
-            } catch (err) {
-                console.error('❌ OAuth client initialization failed:', err);
-                setError('OAuth 초기화 실패. Client ID를 확인해주세요.');
-            }
         };
 
         initializeGoogleAPIs();
     }, [googleClientId, googleDeveloperKey]);
 
-    const signIn = useCallback(() => {
+    const signIn = useCallback(async () => {
         console.log('🔐 Sign in requested');
 
-        if (!tokenClient) {
-            console.error('❌ Token client not initialized');
-            setError('인증 클라이언트가 초기화되지 않았습니다.');
+        if (!googleClientId) {
+            setError('Google Client ID가 설정되지 않았습니다.');
             return;
         }
 
         try {
-            // Request access token with prompt
-            tokenClient.requestAccessToken({ prompt: 'consent' });
-        } catch (err) {
-            console.error('❌ Sign in failed:', err);
-            setError('로그인 요청 실패');
-        }
-    }, [tokenClient]);
+            setIsAuthenticating(true);
+            setError(null);
 
-    const signOut = useCallback(() => {
+            // Build OAuth URL with PKCE
+            const authUrl = await buildAuthUrl(googleClientId, SCOPES);
+
+            console.log('🌐 Redirecting to Google OAuth...');
+
+            // Redirect to Google OAuth consent page
+            window.location.href = authUrl;
+        } catch (err: any) {
+            console.error('❌ Sign in failed:', err);
+            setError(`로그인 요청 실패: ${err.message}`);
+            setIsAuthenticating(false);
+        }
+    }, [googleClientId]);
+
+    const signOut = useCallback(async () => {
         console.log('🚪 Sign out requested');
 
         const storedToken = localStorage.getItem('googleOauthToken');
         if (storedToken) {
             try {
                 const token: GoogleOAuthToken = JSON.parse(storedToken);
-                if (token.accessToken && window.google?.accounts?.oauth2) {
-                    window.google.accounts.oauth2.revoke(token.accessToken, () => {
-                        console.log('✅ Token revoked');
-                    });
+
+                // Revoke both access and refresh tokens
+                if (token.accessToken) {
+                    await revokeToken(token.accessToken);
+                }
+                if (token.refreshToken) {
+                    await revokeToken(token.refreshToken);
                 }
             } catch (e) {
-                console.error('Failed to revoke token:', e);
+                console.error('Failed to revoke tokens:', e);
             }
         }
 
+        // Clear stored token
         localStorage.removeItem('googleOauthToken');
+
+        // Clear GAPI token
+        if (window.gapi?.client) {
+            window.gapi.client.setToken(null);
+        }
+
+        // Clear refresh timeout
+        if (refreshTimeoutRef.current) {
+            clearTimeout(refreshTimeoutRef.current);
+        }
+
         setIsSignedIn(false);
         setError(null);
         console.log('✅ Signed out');
@@ -220,34 +324,57 @@ export const useGoogleAuth = (googleClientId: string, googleDeveloperKey: string
 
         try {
             const token: GoogleOAuthToken = JSON.parse(storedToken);
-            return token.accessToken && token.expiresAt > Date.now() + 60000;
+
+            // Valid if we have access token that's not expired
+            // OR if we have refresh token (can always refresh)
+            return (
+                (token.accessToken && token.expiresAt > Date.now() + 60000) ||
+                !!token.refreshToken
+            );
         } catch {
             return false;
         }
     }, []);
 
-    // Refresh token silently
-    const refreshToken = useCallback(() => {
-        console.log('🔄 Attempting to refresh token...');
+    // Manual refresh (for testing or explicit refresh)
+    const refreshToken = useCallback(async () => {
+        console.log('🔄 Manual token refresh requested');
 
-        if (!tokenClient) {
-            console.error('❌ Token client not initialized');
+        const storedToken = localStorage.getItem('googleOauthToken');
+        if (!storedToken) {
+            setError('토큰이 없습니다.');
             return;
         }
 
         try {
-            // Silent refresh without user interaction
-            tokenClient.requestAccessToken({ prompt: '' });
-        } catch (err) {
-            console.error('❌ Token refresh failed:', err);
-            setError('토큰 갱신 실패. 다시 로그인해주세요.');
+            const token: GoogleOAuthToken = JSON.parse(storedToken);
+
+            if (!token.refreshToken) {
+                setError('리프레시 토큰이 없습니다. 다시 로그인해주세요.');
+                setIsSignedIn(false);
+                return;
+            }
+
+            const newToken = await refreshAccessToken(token.refreshToken, googleClientId);
+
+            localStorage.setItem('googleOauthToken', JSON.stringify(newToken));
+
+            if (window.gapi?.client) {
+                window.gapi.client.setToken({ access_token: newToken.accessToken });
+            }
+
+            console.log('✅ Token manually refreshed');
+        } catch (err: any) {
+            console.error('❌ Manual token refresh failed:', err);
+            setError(`토큰 갱신 실패: ${err.message}`);
             setIsSignedIn(false);
         }
-    }, [tokenClient]);
+    }, [googleClientId]);
 
     return {
         isSignedIn,
         isInitialized,
+        isAuthenticating,
         error,
         signIn,
         signOut,
